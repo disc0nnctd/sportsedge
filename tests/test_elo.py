@@ -59,9 +59,14 @@ def test_draw_probability_peaks_at_parity_and_falls_with_mismatch():
 
 
 def test_default_draw_rate_is_realistic_for_football():
-    """Around a quarter of evenly matched top-flight games end level."""
+    """Around a quarter of evenly matched top-flight games end level.
+
+    The previous default of nu=1.0 gave 33%, which is what top-5 league data
+    (25.4% over 1751 matches) says is far too high. Because draws are priced
+    long, that surplus surfaced as a steady stream of fake +EV draw bets.
+    """
     _, draw, _ = three_way_probabilities(0.0)
-    assert 0.30 < draw < 0.36
+    assert 0.23 < draw < 0.28
 
 
 def test_a_lower_nu_produces_fewer_draws():

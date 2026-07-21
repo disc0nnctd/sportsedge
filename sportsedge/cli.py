@@ -17,6 +17,7 @@ credits untouched.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -28,7 +29,13 @@ from .ledger import Ledger
 from .odds.budget import BudgetExceeded, CreditBudget
 from .odds.devig import DevigError, consensus_probabilities
 from .odds.theoddsapi import Event, OddsAPIError, OddsClient
-from .ratings.elo import Ratings, rating_difference, three_way_probabilities, two_way_probabilities
+from .ratings.elo import (
+    DEFAULT_DRAW_NU,
+    Ratings,
+    rating_difference,
+    three_way_probabilities,
+    two_way_probabilities,
+)
 from .schedule import (
     CRICKET_SPORTS,
     FOOTBALL_SPORTS,
@@ -75,6 +82,23 @@ def _ledger() -> Ledger:
 
 def _has_draws(sport_key: str) -> bool:
     return any(sport_key.startswith(prefix) for prefix in DRAW_SPORTS)
+
+
+def _draw_nu() -> float:
+    """Draw parameter fitted by ``build_ratings.py``, or the package default.
+
+    Using the default when a fitted value exists silently reintroduces the draw
+    bias the fit was performed to remove.
+    """
+    path = DATA_DIR / "draw_nu.json"
+    if path.exists():
+        try:
+            value = float(json.loads(path.read_text())["draw_nu"])
+            if value > 0:
+                return value
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            pass
+    return DEFAULT_DRAW_NU
 
 
 def _sport_keys(args) -> list[str]:
@@ -136,7 +160,7 @@ def _model_view(event: Event, ratings: Ratings, market: dict[str, float]) -> dic
     diff = rating_difference(home_rating, away_rating, neutral_venue=neutral)
 
     if _has_draws(event.sport_key):
-        p_home, p_draw, p_away = three_way_probabilities(diff)
+        p_home, p_draw, p_away = three_way_probabilities(diff, draw_nu=_draw_nu())
         view = {home: p_home, away: p_away, "Draw": p_draw}
     else:
         p_home, p_away = two_way_probabilities(diff)
