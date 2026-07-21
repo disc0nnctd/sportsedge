@@ -29,6 +29,8 @@ from sportsedge.teams import lookup, match, normalise, resolve, tokens
         ("Real Sociedad de Fútbol", "Real Sociedad"),
         ("ACF Fiorentina", "Fiorentina"),
         ("RC Celta de Vigo", "Celta Vigo"),
+        # Rebrands: history is filed under the old name, the odds feed uses the new.
+        ("Manchester Originals", "Manchester Super Giants"),
     ],
 )
 def test_provider_spellings_agree(a, b):

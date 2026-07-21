@@ -73,6 +73,10 @@ ALIASES = {
     "rennais": "rennes",
     "stade brestois": "brest",
     "brestois": "brest",
+    # The Hundred: the odds feed uses the post-rebrand name, Cricsheet's history
+    # is filed under the original. Without this the side has no rating and every
+    # one of its fixtures is skipped.
+    "manchester super giants": "manchester originals",
 }
 
 

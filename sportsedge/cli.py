@@ -84,6 +84,25 @@ def _has_draws(sport_key: str) -> bool:
     return any(sport_key.startswith(prefix) for prefix in DRAW_SPORTS)
 
 
+def _ratings_for(sport_key: str, _cache: dict[str, Ratings] = {}) -> Ratings:
+    """Ratings for one competition, falling back to the shared table.
+
+    Cricket needs a separate table per format: a side's T20 strength says
+    little about its Test strength, so pooling them produces a rating that is
+    wrong for both. ``build_cricket_ratings.py`` writes one file per sport key;
+    football uses the shared ``ratings.json``.
+    """
+    if sport_key not in _cache:
+        specific = DATA_DIR / f"ratings-{sport_key}.json"
+        path = specific if specific.exists() else DATA_DIR / "ratings.json"
+        _cache[sport_key] = Ratings.load(path)
+    return _cache[sport_key]
+
+
+def _any_ratings_available() -> bool:
+    return bool(list(DATA_DIR.glob("ratings*.json")))
+
+
 def _draw_nu() -> float:
     """Draw parameter fitted by ``build_ratings.py``, or the package default.
 
@@ -237,13 +256,14 @@ def cmd_picks(args) -> int:
     """Find +EV bets by comparing an Elo-anchored model to the devigged market."""
     client = _client(args)
     ledger = _ledger()
-    ratings = Ratings.load(DATA_DIR / "ratings.json")
 
-    if not ratings.values:
+    if not _any_ratings_available():
         print(
-            "No Elo ratings found at ~/.sportsedge/ratings.json.\n"
+            "No Elo ratings found in ~/.sportsedge/.\n"
             "Without a rated prior there is no model to compare against the market, "
-            "so no picks can be made. Build ratings from historical results first.",
+            "so no picks can be made. Build ratings first:\n"
+            "  football-kg/build_ratings.py          (football-data.org)\n"
+            "  cricket-kg/build_cricket_ratings.py   (Cricsheet, no key needed)",
             file=sys.stderr,
         )
         return 1
@@ -265,6 +285,7 @@ def cmd_picks(args) -> int:
             print(f"[warn] {key}: {exc}", file=sys.stderr)
             continue
 
+        ratings = _ratings_for(key)
         for event in events:
             market = _market_view(event)
             if not market:
