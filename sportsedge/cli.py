@@ -22,7 +22,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import calibration
+from . import calibration, teams
 from .edge import DEFAULT_KELLY_FRACTION, DEFAULT_MIN_EDGE, blend, evaluate_bet
 from .ledger import Ledger
 from .odds.budget import BudgetExceeded, CreditBudget
@@ -123,11 +123,17 @@ def _model_view(event: Event, ratings: Ratings, market: dict[str, float]) -> dic
     home, away = event.home_team, event.away_team
     if not home or not away:
         return None
-    if home not in ratings.values or away not in ratings.values:
+
+    # Match on normalised names: the odds feed and the results feed spell the
+    # same club differently ("Arsenal" vs "Arsenal FC"), and an exact lookup
+    # silently skips every fixture.
+    home_rating = teams.lookup(home, ratings.values)
+    away_rating = teams.lookup(away, ratings.values)
+    if home_rating is None or away_rating is None:
         return None
 
     neutral = _has_draws(event.sport_key) is False  # cricket tours are often neutral
-    diff = rating_difference(ratings.get(home), ratings.get(away), neutral_venue=neutral)
+    diff = rating_difference(home_rating, away_rating, neutral_venue=neutral)
 
     if _has_draws(event.sport_key):
         p_home, p_draw, p_away = three_way_probabilities(diff)
@@ -224,6 +230,7 @@ def cmd_picks(args) -> int:
         return 0
 
     found = 0
+    unrated: set[str] = set()
     for key in keys:
         try:
             events = client.get_odds(key, regions=[args.region], markets=["h2h"])
@@ -240,6 +247,10 @@ def cmd_picks(args) -> int:
                 continue
             model = _model_view(event, ratings, market)
             if not model:
+                # Record which side is unrated so a silent skip is visible.
+                for name in (event.home_team, event.away_team):
+                    if name and teams.lookup(name, ratings.values) is None:
+                        unrated.add(name)
                 continue
 
             for name, raw_probability in model.items():
@@ -290,6 +301,15 @@ def cmd_picks(args) -> int:
 
     if not found:
         print("No bets clear the edge threshold. That is the expected result most days.")
+
+    if unrated:
+        print(
+            f"\nSkipped {len(unrated)} unrated team(s): {', '.join(sorted(unrated))}\n"
+            "Promoted or lower-division sides legitimately have no rating. If a "
+            "top-flight club appears here it is a name-matching gap — add it to "
+            "sportsedge.teams.ALIASES rather than letting the fixture drop."
+        )
+
     print(f"\n{client.budget.report()}")
     return 0
 
